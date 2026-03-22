@@ -29,9 +29,10 @@ class StateManager
     return self::SESSION_PREFIX . $this->componentName . '_' . $this->instanceId;
   }
 
-  private function load(): void
+  protected function load(): void
   {
-    if (session_status() === PHP_SESSION_NONE) {
+    // Only start session if we're in a web context and headers not sent
+    if (php_sapi_name() !== 'cli' && !headers_sent() && session_status() === PHP_SESSION_NONE) {
       session_start();
     }
 
@@ -39,19 +40,22 @@ class StateManager
     $this->data = $_SESSION[$key] ?? [];
   }
 
-  private function save(): void
+  protected function save(): void
   {
     if (!$this->isDirty) {
       return;
     }
 
-    if (session_status() === PHP_SESSION_NONE) {
+    // Only save if we're in a web context
+    if (php_sapi_name() !== 'cli' && !headers_sent() && session_status() === PHP_SESSION_NONE) {
       session_start();
     }
 
-    $key = $this->getSessionKey();
-    $_SESSION[$key] = $this->data;
-    $this->isDirty = false;
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      $key = $this->getSessionKey();
+      $_SESSION[$key] = $this->data;
+      $this->isDirty = false;
+    }
   }
 
   public function get(string $key, $default = null)

@@ -14,6 +14,9 @@ class Component
   protected ?Closure $view = null;
   protected ?string $instanceId = null;
 
+  // Track if the view has been compiled
+  protected ?string $compiledView = null;
+
   public function __construct(string $name, Closure $definition, ?string $instanceId = null)
   {
     $this->name = $name;
@@ -23,9 +26,6 @@ class Component
     $this->processDefinition();
   }
 
-  /**
-   * Get the component's definition (for cloning)
-   */
   public function getDefinition(): Closure
   {
     return $this->definition;
@@ -79,39 +79,91 @@ class Component
     }
   }
 
+  /**
+   * Get the raw template string from the view closure
+   */
+  protected function getRawTemplate(): string
+  {
+    if (!$this->view) {
+      throw new \RuntimeException("Component '{$this->name}' has no view defined");
+    }
+
+    // Capture the output of the view closure with a dummy state
+    // This gives us the raw template with directives
+    $dummyState = new \stdClass();
+
+    ob_start();
+    $view = $this->view;
+    $view($dummyState);
+    $template = ob_get_clean();
+
+    return $template;
+  }
+
+  /**
+   * Compile the view template
+   */
+  protected function compileViewTemplate(): string
+  {
+    $rawTemplate = $this->getRawTemplate();
+    $cacheKey = $this->name . '_' . md5($rawTemplate);
+
+    // Compile directives to PHP
+    $compiled = Compiler::compile($rawTemplate, $cacheKey);
+
+    return $compiled;
+  }
+
+  /**
+   * Render the component
+   */
   public function render(array $props = []): string
   {
     $this->initializeStateManager();
 
     $stateArray = $this->stateManager->all();
 
+    // Always add the instance ID to props
     $props['_instance'] = $this->stateManager->getInstanceId();
 
+    // Merge props with state
     $mergedState = array_merge($stateArray, $props);
 
-    return $this->compileView($mergedState);
+    return $this->executeView($mergedState);
   }
 
-  protected function compileView(array $state): string
+  /**
+   * Execute the compiled view with the given state
+   */
+  protected function executeView(array $state): string
   {
-    if (!$this->view) {
-      throw new \RuntimeException("Component '{$this->name}' has no view defined");
+    if ($this->compiledView === null) {
+      $this->compiledView = $this->compileViewTemplate();
     }
 
     ob_start();
 
-    if (!isset($state['_instance'])) {
-      $state['_instance'] = $this->stateManager->getInstanceId();
+    try {
+      // Extract the state as an object variable
+      $state = (object) $state;
+
+      // Execute the compiled code - it will have access to $state
+      eval('?>' . $this->compiledView);
+
+      return ob_get_clean();
+    } catch (\ParseError $e) {
+      ob_end_clean();
+      error_log("Compilation error in component '{$this->name}': " . $e->getMessage());
+      error_log("Compiled code:\n" . ($this->compiledView ?? 'null'));
+      throw new \RuntimeException(
+        "Compilation error in component '{$this->name}': " . $e->getMessage()
+      );
     }
-
-    $state = (object) $state;
-
-    $view = $this->view;
-    $view($state);
-
-    return ob_get_clean();
   }
 
+  /**
+   * Call an action on the component
+   */
   public function callAction(string $action, array $params = []): string
   {
     if (!isset($this->actions[$action])) {
