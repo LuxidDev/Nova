@@ -2,25 +2,12 @@
 
 namespace Luxid\Nova;
 
-/**
- * Component Manager
- * 
- * Registry for all Nova components. Components are registered
- * globally and can be resolved by name.
- */
 class ComponentManager
 {
-  /**
-   * Registered components
-   * @var array<string, Component>
-   */
   protected static array $components = [];
 
   /**
-   * Register a component
-   * 
-   * @param string $name Component name
-   * @param Component $component Component instance
+   * Register a component blueprint
    */
   public static function register(string $name, Component $component): void
   {
@@ -28,10 +15,22 @@ class ComponentManager
   }
 
   /**
-   * Resolve a component by name
-   * 
-   * @param string $name Component name
-   * @return Component|null
+   * Create a new instance of a component
+   */
+  public static function make(string $name, ?string $instanceId = null): Component
+  {
+    $blueprint = static::$components[$name] ?? null;
+
+    if (!$blueprint) {
+      throw new \RuntimeException("Component '{$name}' not found");
+    }
+
+    // Use getter method to access the definition
+    return new Component($name, $blueprint->getDefinition(), $instanceId);
+  }
+
+  /**
+   * Resolve a component (for backward compatibility)
    */
   public static function resolve(string $name): ?Component
   {
@@ -40,9 +39,6 @@ class ComponentManager
 
   /**
    * Check if a component exists
-   * 
-   * @param string $name Component name
-   * @return bool
    */
   public static function has(string $name): bool
   {
@@ -51,8 +47,6 @@ class ComponentManager
 
   /**
    * Get all registered components
-   * 
-   * @return array<string, Component>
    */
   public static function all(): array
   {
@@ -60,9 +54,7 @@ class ComponentManager
   }
 
   /**
-   * Remove a component from the registry
-   * 
-   * @param string $name Component name
+   * Remove a component
    */
   public static function unregister(string $name): void
   {
@@ -70,7 +62,7 @@ class ComponentManager
   }
 
   /**
-   * Clear all components (useful for testing)
+   * Clear all components
    */
   public static function clear(): void
   {

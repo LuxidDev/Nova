@@ -1,13 +1,6 @@
 <?php
 
-// Define helper functions in the global namespace
 if (!function_exists('component')) {
-  /**
-   * Register a Nova component
-   *
-   * @param string $name Component name
-   * @param callable $definition Component definition closure
-   */
   function component(string $name, callable $definition): void
   {
     $component = new \Luxid\Nova\Component($name, $definition);
@@ -16,32 +9,37 @@ if (!function_exists('component')) {
 }
 
 if (!function_exists('nova')) {
-  /**
-   * Render a Nova component
-   *
-   * @param string $name Component name
-   * @param array $props Component properties
-   * @return string Rendered HTML
-   */
   function nova(string $name, array $props = []): string
   {
-    $component = \Luxid\Nova\ComponentManager::resolve($name);
+    // Check if an instance ID was passed in props
+    $instanceId = $props['_instance'] ?? null;
 
-    if (!$component) {
-      throw new \RuntimeException("Component '{$name}' not found");
-    }
+    // Create a new component instance
+    $component = \Luxid\Nova\ComponentManager::make($name, $instanceId);
 
     return $component->render($props);
   }
 }
 
-if (!function_exists('nova_component_exists')) {
+if (!function_exists('nova_action')) {
   /**
-   * Check if a component exists
-   *
-   * @param string $name Component name
-   * @return bool
+   * Call an action on a component instance
+   * 
+   * @param string $componentName
+   * @param string $instanceId
+   * @param string $action
+   * @param array $params
+   * @return string
    */
+  function nova_action(string $componentName, string $instanceId, string $action, array $params = []): string
+  {
+    $component = \Luxid\Nova\ComponentManager::make($componentName, $instanceId);
+    return $component->callAction($action, $params);
+  }
+}
+
+// Keep existing helper functions...
+if (!function_exists('nova_component_exists')) {
   function nova_component_exists(string $name): bool
   {
     return \Luxid\Nova\ComponentManager::has($name);
@@ -49,11 +47,6 @@ if (!function_exists('nova_component_exists')) {
 }
 
 if (!function_exists('nova_get_components')) {
-  /**
-   * Get all registered components
-   *
-   * @return array
-   */
   function nova_get_components(): array
   {
     return \Luxid\Nova\ComponentManager::all();
