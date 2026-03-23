@@ -138,13 +138,23 @@ class Component
 
   public function render(array $props = []): string
   {
+    Performance::startTimer('component_render_' . $this->name);
+
     $this->initializeStateManager();
 
     $stateArray = $this->stateManager->all();
     $props['_instance'] = $this->stateManager->getInstanceId();
     $mergedState = array_merge($stateArray, $props);
 
-    return $this->executeView($mergedState);
+    $result = $this->executeView($mergedState);
+
+    $timer = Performance::endTimer('component_render_' . $this->name);
+
+    if ($timer && Compiler::$debug) {
+      error_log("[Nova] Rendered '{$this->name}' in {$timer['time']}ms, memory: {$timer['memory']} bytes");
+    }
+
+    return $result;
   }
 
   protected function executeView(array $state): string

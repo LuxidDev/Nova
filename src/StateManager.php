@@ -5,16 +5,19 @@ namespace Luxid\Nova;
 class StateManager
 {
   private const SESSION_PREFIX = 'nova_state_';
+  private const COMPRESSION_THRESHOLD = 1024; // Compress if > 1KB
 
   private string $instanceId;
   private string $componentName;
   private array $data;
   private bool $isDirty = false;
+  private bool $userCompression = true;
 
-  public function __construct(string $componentName, ?string $instanceId = null)
+  public function __construct(string $componentName, ?string $instanceId = null, bool $userCompression = true)
   {
     $this->componentName = $componentName;
     $this->instanceId = $instanceId ?? $this->generateInstanceId();
+    $this->userCompression = $userCompression;
     $this->load();
   }
 
@@ -35,7 +38,20 @@ class StateManager
     }
 
     $key = $this->getSessionKey();
-    $this->data = $_SESSION[$key] ?? [];
+
+    if (isset($_SESSION[$key])) {
+      $data = $_SESSION[$key];
+
+      // Decompress if needed
+      if ($this->useCompression && is_string($data) && str_starts_with($data, 'gzcompress:')) {
+        $compressed = substr($data, 11);
+        $data = unserialize(gzuncompress(base64_decode($compressed)));
+      }
+
+      $this->data = $data;
+    } else {
+      $this->data = [];
+    }
   }
 
   protected function save(): void
@@ -50,7 +66,18 @@ class StateManager
 
     if (session_status() === PHP_SESSION_ACTIVE) {
       $key = $this->getSessionKey();
-      $_SESSION[$key] = $this->data;
+      $data = $this->data;
+
+      // Compress if enabled and data is large
+      if ($this->useCompression) {
+        $serialized = serialize($data);
+        if (strlen($serialized) > self::COMPRESSION_THRESHOLD) {
+          $compressed = base64_encode(gzcompress($serialized, 9));
+          $data = 'gzcompress:' . $compressed;
+        }
+      }
+
+      $_SESSION[$key] = $data;
       $this->isDirty = false;
     }
   }

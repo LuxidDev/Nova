@@ -7,6 +7,7 @@ class Compiler
   protected static array $cache = [];
   protected static ?string $cachePath = null;
   protected static bool $useFileCache = false;
+  public static bool $debug = false;
 
   public static function setCachePath(string $path): void
   {
@@ -17,12 +18,19 @@ class Compiler
     }
   }
 
+  public static function enableDebug(bool $enable = true): void
+  {
+    self::$debug = $enable;
+  }
+
   public static function compile(string $template, ?string $cacheKey = null): string
   {
+    // Check memory cache
     if ($cacheKey && isset(self::$cache[$cacheKey])) {
       return self::$cache[$cacheKey];
     }
 
+    // Check file cache
     if ($cacheKey && self::$useFileCache && self::$cachePath) {
       $cacheFile = self::$cachePath . '/' . md5($cacheKey) . '.php';
       if (file_exists($cacheFile)) {
@@ -34,10 +42,17 @@ class Compiler
 
     $compiled = self::compileString($template);
 
+    // Store in cache
     if ($cacheKey) {
       self::$cache[$cacheKey] = $compiled;
+
       if (self::$useFileCache && self::$cachePath) {
-        file_put_contents($cacheFile, $compiled);
+        $cacheFile = self::$cachePath . '/' . md5($cacheKey) . '.php';
+        file_put_contents($cacheFile, $compiled, LOCK_EX);
+
+        if (self::$debug) {
+          error_log("[Nova] Cached template: {$cacheKey}");
+        }
       }
     }
 
@@ -336,11 +351,37 @@ class Compiler
   public static function clearCache(): void
   {
     self::$cache = [];
+
     if (self::$useFileCache && self::$cachePath && is_dir(self::$cachePath)) {
       $files = glob(self::$cachePath . '/*.php');
       foreach ($files as $file) {
         unlink($file);
       }
+
+      if (self::$debug) {
+        error_log("[Nova] Cleared template cache: " . count($files) . " files");
+      }
     }
+  }
+
+  public static function getCacheStats(): array
+  {
+    $stats = [
+      'memory_cache_count' => count(self::$cache),
+      'file_cache_enabled' => self::$useFileCache,
+      'file_cache_path' => self::$cachePath,
+    ];
+
+    if (self::$useFileCache && self::$cachePath && is_dir(self::$cachePath)) {
+      $files = glob(self::$cachePath . '/*.php');
+      $stats['file_cache_count'] = count($files);
+      $stats['file_cache_size'] = 0;
+
+      foreach ($files as $file) {
+        $stats['file_cache_size'] += filesize($file);
+      }
+    }
+
+    return $stats;
   }
 }
