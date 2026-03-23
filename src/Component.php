@@ -13,9 +13,10 @@ class Component
   protected array $actions = [];
   protected ?Closure $view = null;
   protected ?string $instanceId = null;
-
-  // Track if the view has been compiled
   protected ?string $compiledView = null;
+
+  protected array $props = [];
+  protected array $children = [];
 
   public function __construct(string $name, Closure $definition, ?string $instanceId = null)
   {
@@ -61,6 +62,61 @@ class Component
     return $this;
   }
 
+  public function setProps(array $props): self
+  {
+    $this->props = $props;
+    return $this;
+  }
+
+  public function prop(string $key, $default = null)
+  {
+    return $this->props[$key] ?? $default;
+  }
+
+  public function addChild(Component $child): self
+  {
+    $this->children[] = $child;
+    return $this;
+  }
+
+  /**
+   * Render a nested component, honouring any slots that were captured by the
+   * caller before this method was invoked.
+   *
+   * Execution order in the compiled PHP for e.g. @component('card', [...]):
+   *
+   *   Slot::start('default');          // compiled wrapper
+   *     Slot::start('body'); ... Slot::end();  // @slot('body') inside wrapper
+   *   Slot::end();                      // compiled wrapper end
+   *   $component->renderComponent('card', [...]);  // ← we are here
+   *
+   * At this point $slots contains whatever the caller injected.  We freeze
+   * them so the card's own default @slot('body') block cannot overwrite them,
+   * render the card view, then thaw to reset for the next sibling component.
+   */
+  public function renderComponent(string $name, array $props = []): string
+  {
+    if (!ComponentManager::has($name)) {
+      throw new \RuntimeException("Component '{$name}' not found");
+    }
+
+    $instanceId = $props['_instance'] ?? $this->getInstanceId() . '_' . $name;
+    $component = ComponentManager::make($name, $instanceId);
+    $component->setProps($props);
+    $this->addChild($component);
+
+    // Snapshot the slots captured so far by the caller, then freeze them so
+    // the component's own default @slot definitions cannot overwrite them.
+    Slot::freeze();
+
+    $html = $component->render($props);
+
+    // Release the freeze and clear slots so the next component starts clean.
+    Slot::thaw();
+
+    return $html;
+  }
+
   protected function initializeStateManager(): void
   {
     if ($this->stateManager !== null) {
@@ -73,97 +129,73 @@ class Component
       $initializer = $this->stateInitializer;
       $defaultState = $initializer();
 
+      error_log("Initializing state for {$this->name}: " . json_encode($defaultState));
+
       if (empty($this->stateManager->all())) {
         $this->stateManager->initialize($defaultState);
       }
+
+      error_log("State after init: " . json_encode($this->stateManager->all()));
     }
   }
 
-  /**
-   * Get the raw template string from the view closure
-   */
   protected function getRawTemplate(): string
   {
     if (!$this->view) {
       throw new \RuntimeException("Component '{$this->name}' has no view defined");
     }
 
-    // Capture the output of the view closure with a dummy state
-    // This gives us the raw template with directives
-    $dummyState = new \stdClass();
+    $this->initializeStateManager();
+    $state = (object) $this->stateManager->all();
 
     ob_start();
     $view = $this->view;
-    $view($dummyState);
-    $template = ob_get_clean();
-
-    return $template;
+    $view($state);
+    return ob_get_clean();
   }
 
-  /**
-   * Compile the view template
-   */
   protected function compileViewTemplate(): string
   {
     $rawTemplate = $this->getRawTemplate();
     $cacheKey = $this->name . '_' . md5($rawTemplate);
-
-    // Compile directives to PHP
-    $compiled = Compiler::compile($rawTemplate, $cacheKey);
-
-    return $compiled;
+    return Compiler::compile($rawTemplate, $cacheKey);
   }
 
-  /**
-   * Render the component
-   */
   public function render(array $props = []): string
   {
     $this->initializeStateManager();
 
     $stateArray = $this->stateManager->all();
 
-    // Always add the instance ID to props
-    $props['_instance'] = $this->stateManager->getInstanceId();
+    error_log("Rendering component '{$this->name}'. State: " . json_encode($stateArray));
 
-    // Merge props with state
+    $props['_instance'] = $this->stateManager->getInstanceId();
     $mergedState = array_merge($stateArray, $props);
+
+    error_log("Merged state: " . json_encode($mergedState));
 
     return $this->executeView($mergedState);
   }
 
-  /**
-   * Execute the compiled view with the given state
-   */
   protected function executeView(array $state): string
   {
     if ($this->compiledView === null) {
       $this->compiledView = $this->compileViewTemplate();
     }
 
-    ob_start();
+    $state = (object) $state;
+    $component = $this;
+    $compiledView = $this->compiledView;
 
-    try {
-      // Extract the state as an object variable
-      $state = (object) $state;
-
-      // Execute the compiled code - it will have access to $state
-      eval('?>' . $this->compiledView);
-
+    $render = function () use ($state, $compiledView, $component) {
+      ob_start();
+      eval('?>' . $compiledView);
       return ob_get_clean();
-    } catch (\ParseError $e) {
-      ob_end_clean();
-      error_log("Compilation error in component '{$this->name}': " . $e->getMessage());
-      error_log("Compiled code:\n" . ($this->compiledView ?? 'null'));
-      throw new \RuntimeException(
-        "Compilation error in component '{$this->name}': " . $e->getMessage()
-      );
-    }
+    };
+
+    return $render();
   }
 
-  /**
-   * Call an action on the component
-   */
   public function callAction(string $action, array $params = []): string
   {
     if (!isset($this->actions[$action])) {
