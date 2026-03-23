@@ -345,6 +345,58 @@ class Compiler
       ];
     }
 
+    // @click as HTML attribute: @click="action" → data-nova-click="action"
+    if (preg_match('/^@click="([^"]+)"/', substr($template, $position), $matches)) {
+      $php = 'data-nova-click="' . htmlspecialchars($matches[1]) . '"';
+      return ['php' => $php, 'end' => $position + strlen($matches[0])];
+    }
+
+    // @click directive - generate button with data attribute
+    if (preg_match('/^@click\(/', substr($template, $position))) {
+      $pattern = '/^@click\(([^)]+)\)/';
+      if (preg_match($pattern, substr($template, $position), $matches)) {
+        $action = trim($matches[1], '\'"');
+        // Generate a button with the data attribute
+        $php = '<button data-nova-click="' . htmlspecialchars($action) . '"';
+        $end = $position + strlen($matches[0]);
+        return ['php' => $php, 'end' => $end];
+      }
+    }
+
+    // @submit as HTML attribute: @submit="action" → data-nova-submit="action"
+    if (preg_match('/^@submit="([^"]+)"/', substr($template, $position), $matches)) {
+      $php = 'data-nova-submit="' . htmlspecialchars($matches[1]) . '"';
+      return ['php' => $php, 'end' => $position + strlen($matches[0])];
+    }
+
+    // @submit directive
+    if (preg_match('/^@submit\(/', substr($template, $position))) {
+      $pattern = '/^@submit\(([^)]+)\)/';
+      if (preg_match($pattern, substr($template, $position), $matches)) {
+        $action = trim($matches[1], '\'"');
+        $php = '<form data-nova-submit="' . htmlspecialchars($action) . '"';
+        $end = $position + strlen($matches[0]);
+        return ['php' => $php, 'end' => $end];
+      }
+    }
+
+    // @input as HTML attribute: @input="action" → data-nova-input="action"
+    if (preg_match('/^@input="([^"]+)"/', substr($template, $position), $matches)) {
+      $php = 'data-nova-input="' . htmlspecialchars($matches[1]) . '"';
+      return ['php' => $php, 'end' => $position + strlen($matches[0])];
+    }
+
+    // @input directive
+    if (preg_match('/^@input\(/', substr($template, $position))) {
+      $pattern = '/^@input\(([^)]+)\)/';
+      if (preg_match($pattern, substr($template, $position), $matches)) {
+        $action = trim($matches[1], '\'"');
+        $php = '<input data-nova-input="' . htmlspecialchars($action) . '"';
+        $end = $position + strlen($matches[0]);
+        return ['php' => $php, 'end' => $end];
+      }
+    }
+
     return null;
   }
 

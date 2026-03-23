@@ -1,0 +1,147 @@
+[2026-03-23 12:04:53] AJAX Request detected
+[2026-03-23 12:04:53] Input: Array
+(
+    [component] => test-counter_69c12b8317fdf
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+)
+
+[2026-03-23 12:04:53] Action called - instanceId: test-counter_69c12b8317fdf, action: increment
+[2026-03-23 12:04:53] Component name: test-counter
+[2026-03-23 12:04:53] Error: Component 'test-counter' not found
+[2026-03-23 12:09:18] AJAX Request detected
+[2026-03-23 12:09:18] Input: Array
+(
+    [component] => test-counter_69c12b8317fdf
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+)
+
+[2026-03-23 12:09:18] Action called - instanceId: test-counter_69c12b8317fdf, action: increment
+[2026-03-23 12:09:18] Component name: test-counter
+[2026-03-23 12:09:18] Error: Component 'test-counter' not found
+[2026-03-23 12:10:28] AJAX Request detected
+[2026-03-23 12:10:28] Input: Array
+(
+    [component] => test-counter_69c12b8317fdf
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+)
+
+[2026-03-23 12:10:28] Action called - instanceId: test-counter_69c12b8317fdf, action: increment
+[2026-03-23 12:10:28] Component name: test-counter
+[2026-03-23 12:10:28] Error: Component 'test-counter' not found
+[2026-03-23 13:03:29] AJAX Request detected
+[2026-03-23 13:03:29] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:29] Action called - instanceId: working-counter_69c13a1f930da, action: increment
+[2026-03-23 13:03:29] Component name: working-counter
+[2026-03-23 13:03:29] AJAX Request detected
+[2026-03-23 13:03:29] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => decrement
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:29] Action called - instanceId: working-counter_69c13a1f930da, action: decrement
+[2026-03-23 13:03:29] Component name: working-counter
+[2026-03-23 13:03:30] AJAX Request detected
+[2026-03-23 13:03:30] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:30] Action called - instanceId: working-counter_69c13a1f930da, action: increment
+[2026-03-23 13:03:30] Component name: working-counter
+[2026-03-23 13:03:31] AJAX Request detected
+[2026-03-23 13:03:31] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:31] Action called - instanceId: working-counter_69c13a1f930da, action: increment
+[2026-03-23 13:03:31] Component name: working-counter
+[2026-03-23 13:03:31] AJAX Request detected
+[2026-03-23 13:03:31] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => increment
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:31] Action called - instanceId: working-counter_69c13a1f930da, action: increment
+[2026-03-23 13:03:31] Component name: working-counter
+[2026-03-23 13:03:32] AJAX Request detected
+[2026-03-23 13:03:32] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => decrement
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:32] Action called - instanceId: working-counter_69c13a1f930da, action: decrement
+[2026-03-23 13:03:32] Component name: working-counter
+[2026-03-23 13:03:33] AJAX Request detected
+[2026-03-23 13:03:33] Input: Array
+(
+    [component] => working-counter
+    [instance] => working-counter_69c13a1f930da
+    [action] => decrement
+    [params] => Array
+        (
+        )
+
+    [_token] => 98568aed246552ae94e387903ba3ba32ada64224998ec622e09cb4d15d7d6996
+)
+
+[2026-03-23 13:03:33] Action called - instanceId: working-counter_69c13a1f930da, action: decrement
+[2026-03-23 13:03:33] Component name: working-counter

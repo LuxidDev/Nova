@@ -32,8 +32,7 @@ class Component
 
   protected function processDefinition(): void
   {
-    $definition = $this->definition;
-    $definition($this);
+    ($this->definition)($this);
   }
 
   public function state(Closure $initializer): self
@@ -41,36 +40,30 @@ class Component
     $this->stateInitializer = $initializer;
     return $this;
   }
-
   public function actions(array $actions): self
   {
     $this->actions = $actions;
     return $this;
   }
-
   public function view(Closure $view): self
   {
     $this->view = $view;
     return $this;
   }
-
   public function instanceId(string $id): self
   {
     $this->instanceId = $id;
     return $this;
   }
-
   public function setProps(array $props): self
   {
     $this->props = $props;
     return $this;
   }
-
   public function prop(string $key, $default = null)
   {
     return $this->props[$key] ?? $default;
   }
-
   public function addChild(Component $child): self
   {
     $this->children[] = $child;
@@ -88,7 +81,6 @@ class Component
     $component->setProps($props);
     $this->addChild($component);
 
-    // Snapshot slots and freeze them
     Slot::freeze();
     $html = $component->render($props);
     Slot::thaw();
@@ -98,16 +90,12 @@ class Component
 
   protected function initializeStateManager(): void
   {
-    if ($this->stateManager !== null) {
-      return;
-    }
+    if ($this->stateManager !== null) return;
 
     $this->stateManager = new StateManager($this->name, $this->instanceId);
 
     if ($this->stateInitializer) {
-      $initializer = $this->stateInitializer;
-      $defaultState = $initializer();
-
+      $defaultState = ($this->stateInitializer)();
       if (empty($this->stateManager->all())) {
         $this->stateManager->initialize($defaultState);
       }
@@ -116,45 +104,30 @@ class Component
 
   protected function getRawTemplate(): string
   {
-    if (!$this->view) {
-      throw new \RuntimeException("Component '{$this->name}' has no view defined");
-    }
+    if (!$this->view) throw new \RuntimeException("Component '{$this->name}' has no view defined");
 
     $this->initializeStateManager();
     $state = (object) $this->stateManager->all();
 
     ob_start();
-    $view = $this->view;
-    $view($state);
+    ($this->view)($state);
     return ob_get_clean();
   }
 
   protected function compileViewTemplate(): string
   {
     $rawTemplate = $this->getRawTemplate();
-    $cacheKey = $this->name . '_' . md5($rawTemplate);
-    return Compiler::compile($rawTemplate, $cacheKey);
+    return Compiler::compile($rawTemplate, $this->name . '_' . md5($rawTemplate));
   }
 
   public function render(array $props = []): string
   {
-    Performance::startTimer('component_render_' . $this->name);
-
     $this->initializeStateManager();
 
-    $stateArray = $this->stateManager->all();
     $props['_instance'] = $this->stateManager->getInstanceId();
-    $mergedState = array_merge($stateArray, $props);
+    $mergedState = array_merge($this->stateManager->all(), $props);
 
-    $result = $this->executeView($mergedState);
-
-    $timer = Performance::endTimer('component_render_' . $this->name);
-
-    if ($timer && Compiler::$debug) {
-      error_log("[Nova] Rendered '{$this->name}' in {$timer['time']}ms, memory: {$timer['memory']} bytes");
-    }
-
-    return $result;
+    return $this->executeView($mergedState);
   }
 
   protected function executeView(array $state): string
@@ -163,17 +136,29 @@ class Component
       $this->compiledView = $this->compileViewTemplate();
     }
 
-    $state = (object) $state;
-    $component = $this;
+    $state        = (object) $state;
+    $component    = $this;
     $compiledView = $this->compiledView;
 
-    $render = function () use ($state, $compiledView, $component) {
+    return (function () use ($state, $compiledView, $component) {
       ob_start();
-      eval('?>' . $compiledView);
-      return ob_get_clean();
-    };
 
-    return $render();
+      $instanceId = $component->getInstanceId();
+      $stateArray = get_object_vars($state);
+
+      echo '<div 
+        data-nova-component 
+        data-nova-id="' . htmlspecialchars($instanceId) . '"
+        data-nova-component-name="' . htmlspecialchars($component->getName()) . '"';
+      if (!empty($stateArray)) {
+        echo ' data-nova-state="' . htmlspecialchars(json_encode($stateArray), ENT_QUOTES) . '"';
+      }
+      echo '>';
+      eval('?>' . $compiledView);
+      echo '</div>';
+
+      return ob_get_clean();
+    })();
   }
 
   public function callAction(string $action, array $params = []): string
@@ -185,20 +170,31 @@ class Component
     $this->initializeStateManager();
 
     $state = $this->stateManager->all();
+    ($this->actions[$action])($state, ...$params);
 
-    $actionFn = $this->actions[$action];
-    $result = $actionFn($state, ...$params);
-
+    // Write mutated values back into the state manager
     foreach ($state as $key => $value) {
       $this->stateManager->set($key, $value);
     }
 
-    return $result ?? $this->render();
+    // FIX: Persist to session immediately so render() reads the updated state.
+    // StateManager::save() was protected/__destruct-only; we added flush() below.
+    $this->stateManager->flush();
+
+    return $this->render();
   }
 
   public function getName(): string
   {
     return $this->name;
+  }
+  public function hasAction(string $action): bool
+  {
+    return isset($this->actions[$action]);
+  }
+  public function getActions(): array
+  {
+    return $this->actions;
   }
 
   public function getStateManager(): ?StateManager
@@ -211,16 +207,6 @@ class Component
   {
     $this->initializeStateManager();
     return $this->stateManager->all();
-  }
-
-  public function hasAction(string $action): bool
-  {
-    return isset($this->actions[$action]);
-  }
-
-  public function getActions(): array
-  {
-    return $this->actions;
   }
 
   public function getInstanceId(): string

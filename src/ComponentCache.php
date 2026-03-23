@@ -8,7 +8,7 @@ class ComponentCache
   protected static ?string $cachePath = null;
   protected static bool $enabled = false;
 
-  public static function enable(string $path = null): void
+  public static function enable(?string $path = null): void
   {
     self::$enabled = true;
 

@@ -5,19 +5,16 @@ namespace Luxid\Nova;
 class StateManager
 {
   private const SESSION_PREFIX = 'nova_state_';
-  private const COMPRESSION_THRESHOLD = 1024; // Compress if > 1KB
 
   private string $instanceId;
   private string $componentName;
   private array $data;
   private bool $isDirty = false;
-  private bool $userCompression = true;
 
-  public function __construct(string $componentName, ?string $instanceId = null, bool $userCompression = true)
+  public function __construct(string $componentName, ?string $instanceId = null)
   {
     $this->componentName = $componentName;
-    $this->instanceId = $instanceId ?? $this->generateInstanceId();
-    $this->userCompression = $userCompression;
+    $this->instanceId    = $instanceId ?? $this->generateInstanceId();
     $this->load();
   }
 
@@ -36,50 +33,30 @@ class StateManager
     if (php_sapi_name() !== 'cli' && !headers_sent() && session_status() === PHP_SESSION_NONE) {
       session_start();
     }
-
-    $key = $this->getSessionKey();
-
-    if (isset($_SESSION[$key])) {
-      $data = $_SESSION[$key];
-
-      // Decompress if needed
-      if ($this->useCompression && is_string($data) && str_starts_with($data, 'gzcompress:')) {
-        $compressed = substr($data, 11);
-        $data = unserialize(gzuncompress(base64_decode($compressed)));
-      }
-
-      $this->data = $data;
-    } else {
-      $this->data = [];
-    }
+    $this->data = $_SESSION[$this->getSessionKey()] ?? [];
   }
 
   protected function save(): void
   {
-    if (!$this->isDirty) {
-      return;
-    }
+    if (!$this->isDirty) return;
 
     if (php_sapi_name() !== 'cli' && !headers_sent() && session_status() === PHP_SESSION_NONE) {
       session_start();
     }
 
     if (session_status() === PHP_SESSION_ACTIVE) {
-      $key = $this->getSessionKey();
-      $data = $this->data;
-
-      // Compress if enabled and data is large
-      if ($this->useCompression) {
-        $serialized = serialize($data);
-        if (strlen($serialized) > self::COMPRESSION_THRESHOLD) {
-          $compressed = base64_encode(gzcompress($serialized, 9));
-          $data = 'gzcompress:' . $compressed;
-        }
-      }
-
-      $_SESSION[$key] = $data;
+      $_SESSION[$this->getSessionKey()] = $this->data;
       $this->isDirty = false;
     }
+  }
+
+  /**
+   * Public alias for save() — call this when you need state flushed to the
+   * session immediately (e.g. before re-rendering in the same request).
+   */
+  public function flush(): void
+  {
+    $this->save();
   }
 
   public function get(string $key, $default = null)
@@ -114,7 +91,7 @@ class StateManager
   public function initialize(array $defaults): self
   {
     if (empty($this->data)) {
-      $this->data = $defaults;
+      $this->data    = $defaults;
       $this->isDirty = true;
     }
     return $this;
@@ -134,17 +111,14 @@ class StateManager
   {
     return $this->get($name);
   }
-
   public function __set($name, $value)
   {
     $this->set($name, $value);
   }
-
   public function __isset($name)
   {
     return $this->has($name);
   }
-
   public function __unset($name)
   {
     $this->remove($name);
