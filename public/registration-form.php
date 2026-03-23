@@ -1,6 +1,10 @@
 <?php
 
-// Registration form component with validation
+require_once __DIR__ . '/../bootstrap.php';
+
+use Luxid\Nova\Validation\Validator;
+use Luxid\Nova\Form\Form;
+
 component('registration-form', function ($c) {
   $c->state(function () {
     return [
@@ -15,34 +19,27 @@ component('registration-form', function ($c) {
 
   $c->actions([
     'register' => function (&$state, $data) {
-      // Debug: Log the incoming data
-      error_log("Register action called with data: " . print_r($data, true));
-
       // Validate
-      $validator = new \Luxid\Nova\Validation\Validator($data, [
+      $validator = new Validator($data, [
         'name' => 'required|min:2|max:50',
         'email' => 'required|email',
         'password' => 'required|min:8|confirmed',
         'password_confirmation' => 'required'
       ]);
 
-      error_log("Validation rules applied");
-
-      $isValid = $validator->validate();
-      error_log("Validation result: " . ($isValid ? 'valid' : 'invalid'));
-
-      if ($isValid) {
+      if ($validator->validate()) {
+        // Simulate user registration
         $state['name'] = $data['name'];
         $state['email'] = $data['email'];
         $state['success'] = true;
         $state['errors'] = [];
-        error_log("Registration successful");
       } else {
         $state['errors'] = $validator->getErrors();
         $state['success'] = false;
+
+        // Keep the submitted values
         $state['name'] = $data['name'] ?? '';
         $state['email'] = $data['email'] ?? '';
-        error_log("Validation errors: " . print_r($state['errors'], true));
       }
     }
   ]);
@@ -112,3 +109,76 @@ component('registration-form', function ($c) {
 <?php
   });
 });
+
+// Render the form
+$instanceId = 'registration_' . uniqid();
+?>
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Registration Form - Nova Validation Demo</title>
+  <meta name="csrf-token" content="<?php echo bin2hex(random_bytes(32)); ?>">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    [data-nova-loading] {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>✨ Nova Validation Demo</h1>
+      <p>Try submitting the form with invalid data to see validation in action!</p>
+      <?php echo nova('registration-form', ['_instance' => $instanceId]); ?>
+    </div>
+  </div>
+
+  <script src="/nova.js"></script>
+</body>
+
+</html>

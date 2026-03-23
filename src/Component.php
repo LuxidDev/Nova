@@ -170,15 +170,16 @@ class Component
     $this->initializeStateManager();
 
     $state = $this->stateManager->all();
-    ($this->actions[$action])($state, ...$params);
+
+    // Pass the params as a single array argument, not spread
+    ($this->actions[$action])($state, $params);
 
     // Write mutated values back into the state manager
     foreach ($state as $key => $value) {
       $this->stateManager->set($key, $value);
     }
 
-    // FIX: Persist to session immediately so render() reads the updated state.
-    // StateManager::save() was protected/__destruct-only; we added flush() below.
+    // Persist to session immediately
     $this->stateManager->flush();
 
     return $this->render();
