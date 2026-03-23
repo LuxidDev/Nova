@@ -15,7 +15,6 @@ class StateManager
   {
     $this->componentName = $componentName;
     $this->instanceId = $instanceId ?? $this->generateInstanceId();
-
     $this->load();
   }
 
@@ -37,9 +36,6 @@ class StateManager
 
     $key = $this->getSessionKey();
     $this->data = $_SESSION[$key] ?? [];
-
-    // Debug
-    error_log("Loading state for {$this->componentName} ({$this->instanceId}): " . json_encode($this->data));
   }
 
   protected function save(): void
@@ -56,9 +52,6 @@ class StateManager
       $key = $this->getSessionKey();
       $_SESSION[$key] = $this->data;
       $this->isDirty = false;
-
-      // Debug
-      error_log("Saving state for {$this->componentName} ({$this->instanceId}): " . json_encode($this->data));
     }
   }
 
@@ -97,7 +90,6 @@ class StateManager
       $this->data = $defaults;
       $this->isDirty = true;
     }
-
     return $this;
   }
 

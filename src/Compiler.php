@@ -103,52 +103,31 @@ class Compiler
 
   protected static function parseSlotBlock(string $template, int $position, bool $callerContext = false): ?array
   {
-    error_log("parseSlotBlock called at position $position");
-
-    // Parse @slot('name')
     $pattern = '/^@slot\(([^)]+)\)/';
     if (!preg_match($pattern, substr($template, $position), $matches)) {
-      error_log("  No match for @slot pattern");
       return null;
     }
 
     $slotName = trim($matches[1]);
-    error_log("  Found slot: $slotName");
-
     $startLength = strlen($matches[0]);
     $contentStart = $position + $startLength;
-    error_log("  Content starts at $contentStart");
 
-    // Find matching @endslot
     $endPos = self::findMatchingEndDirective($template, $contentStart, '@endslot');
     if ($endPos === false) {
-      error_log("  Could not find matching @endslot");
       return null;
     }
 
-    error_log("  Found @endslot at $endPos");
-
     $content = substr($template, $contentStart, $endPos - $contentStart);
-    error_log("  Content length: " . strlen($content));
-    error_log("  Content preview: " . substr($content, 0, 100));
-
-    // Inner content of a caller-context slot may itself contain components,
-    // but NOT more slot injections at this level — compile normally.
     $compiledContent = self::compileString($content);
-    error_log("  Compiled content length: " . strlen($compiledContent));
-
     $slotNamePhp = "'" . addslashes(trim($slotName, " '\"")) . "'";
 
     if ($callerContext) {
-      // Caller context: just capture the slot content into the registry.
-      // No render() — the component's own view will call render() when it
-      // processes its own @slot('name')..@endslot default definition.
+      // Caller context: just capture the slot content
       $php = "<?php \\Luxid\\Nova\\Slot::start({$slotNamePhp}); ?>" .
         $compiledContent .
         "<?php \\Luxid\\Nova\\Slot::end(); ?>";
     } else {
-      // Component view context: capture the default content, then render —
-      // outputs injected content if frozen, or the default if not.
+      // Component view context: capture default content and render
       $php = "<?php \\Luxid\\Nova\\Slot::start({$slotNamePhp}); ?>" .
         $compiledContent .
         "<?php \\Luxid\\Nova\\Slot::end(); ?>" .
@@ -163,62 +142,55 @@ class Compiler
 
   protected static function parseComponentBlock(string $template, int $position): ?array
   {
-    error_log("parseComponentBlock called at position $position");
-
-    // Parse @component('name', ['prop' => 'value'])
     $pattern = '/^@component\(([^,]+)(?:,\s*\[(.*)\])?\)/';
     if (!preg_match($pattern, substr($template, $position), $matches)) {
-      error_log("  No match for @component pattern");
       return null;
     }
 
     $componentName = trim($matches[1], '\'"');
     $props = isset($matches[2]) ? trim($matches[2]) : '[]';
-    error_log("  Found component: $componentName");
-
     if ($props !== '[]') {
       $props = '[' . $props . ']';
     }
 
     $startLength = strlen($matches[0]);
     $contentStart = $position + $startLength;
-    error_log("  Content starts at $contentStart");
 
-    // Find matching @endcomponent — may be absent for self-closing usage
     $endPos = self::findMatchingEndDirective($template, $contentStart, '@endcomponent');
     if ($endPos === false) {
-      // Not a block component — caller will try parseInlineComponent instead
       return null;
     }
 
-    error_log("  Found @endcomponent at $endPos");
-
-    // Extract and compile content (this becomes the default slot)
     $content = substr($template, $contentStart, $endPos - $contentStart);
-    error_log("  Content length: " . strlen($content));
-    error_log("  Content preview: " . substr($content, 0, 100));
-
-    // Compile the content between @component and @endcomponent in "caller
-    // context" — @slot blocks inside are injections, not default definitions,
-    // so they emit Slot::start/end only (no render()).  The compiled output
-    // runs immediately before renderComponent(), populating $slots so that
-    // freeze() inside renderComponent() captures the right values.
     $compiledContent = self::compileString($content, true);
-    error_log("  Compiled content length: " . strlen($compiledContent));
 
     $php = $compiledContent .
       "<?php echo \$component->renderComponent({$matches[1]}, {$props}); ?>";
 
     return [
       'php' => $php,
-      // FIX: @endcomponent is 13 characters, not 12
       'end' => $endPos + strlen('@endcomponent')
     ];
   }
 
+  protected static function parseInlineComponent(string $template, int $position): ?array
+  {
+    $pattern = '/^@component\(([^,]+)(?:,\s*(\[.*?\]))?\)/s';
+    if (!preg_match($pattern, substr($template, $position), $matches)) {
+      return null;
+    }
+
+    $props = isset($matches[2]) ? trim($matches[2]) : '[]';
+    $componentName = $matches[1];
+
+    $php = "<?php echo \$component->renderComponent({$componentName}, {$props}); ?>";
+    $end = $position + strlen($matches[0]);
+
+    return ['php' => $php, 'end' => $end];
+  }
+
   protected static function findMatchingEndDirective(string $template, int $startPos, string $endDirective): int|false
   {
-    // Slots are never nested — just find the very next @endslot.
     if ($endDirective === '@endslot') {
       $pos = strpos($template, '@endslot', $startPos);
       return $pos !== false ? $pos : false;
@@ -227,36 +199,28 @@ class Compiler
     if ($endDirective === '@endcomponent') {
       $pos = $startPos;
       $length = strlen($template);
-      $componentLen  = strlen('@component');
+      $componentLen = strlen('@component');
       $endcomponentLen = strlen('@endcomponent');
-      $slotLen       = strlen('@slot');
-      $endslotLen    = strlen('@endslot');
+      $slotLen = strlen('@slot');
+      $endslotLen = strlen('@endslot');
 
       while ($pos < $length) {
-        // @endcomponent check must come before @component check so we don't
-        // match "@component" as a prefix of "@endcomponent".
         if (substr($template, $pos, $endcomponentLen) === '@endcomponent') {
           return $pos;
         }
 
-        // Skip over @slot('name')...@endslot blocks entirely.
-        // A @component tag that appears inside a @slot block belongs to that
-        // slot's content — it must NOT affect our depth tracking.
+        // Skip over @slot blocks entirely
         if (substr($template, $pos, $slotLen) === '@slot') {
           $afterSlotTag = $pos + $slotLen;
-          // Find the matching @endslot for this @slot
           $slotEnd = strpos($template, '@endslot', $afterSlotTag);
           if ($slotEnd !== false) {
-            // Jump past the entire @slot..@endslot block
             $pos = $slotEnd + $endslotLen;
             continue;
           }
-          // No @endslot found — malformed template, give up
           return false;
         }
 
-        // Skip over nested block @component...@endcomponent pairs.
-        // Self-closing @component (no @endcomponent) just advances past the tag.
+        // Skip over nested component blocks
         if (substr($template, $pos, $componentLen) === '@component') {
           $afterOpening = $pos + $componentLen;
           $nestedEnd = self::findMatchingEndDirective($template, $afterOpening, '@endcomponent');
@@ -275,26 +239,6 @@ class Compiler
     }
 
     return false;
-  }
-
-  /**
-   * Handle @component('name', [...]) with no @endcomponent — renders with no
-   * slots (or only the default empty slot).
-   */
-  protected static function parseInlineComponent(string $template, int $position): ?array
-  {
-    $pattern = '/^@component\(([^,]+)(?:,\s*(\[.*?\]))?\)/s';
-    if (!preg_match($pattern, substr($template, $position), $matches)) {
-      return null;
-    }
-
-    $props = isset($matches[2]) ? trim($matches[2]) : '[]';
-    $componentName = $matches[1]; // keep quotes intact for renderComponent call
-
-    $php = "<?php echo \$component->renderComponent({$componentName}, {$props}); ?>";
-    $end = $position + strlen($matches[0]);
-
-    return ['php' => $php, 'end' => $end];
   }
 
   protected static function parseInlineDirective(string $template, int $position): ?array

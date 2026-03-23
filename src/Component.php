@@ -14,7 +14,6 @@ class Component
   protected ?Closure $view = null;
   protected ?string $instanceId = null;
   protected ?string $compiledView = null;
-
   protected array $props = [];
   protected array $children = [];
 
@@ -23,7 +22,6 @@ class Component
     $this->name = $name;
     $this->definition = $definition;
     $this->instanceId = $instanceId;
-
     $this->processDefinition();
   }
 
@@ -79,21 +77,6 @@ class Component
     return $this;
   }
 
-  /**
-   * Render a nested component, honouring any slots that were captured by the
-   * caller before this method was invoked.
-   *
-   * Execution order in the compiled PHP for e.g. @component('card', [...]):
-   *
-   *   Slot::start('default');          // compiled wrapper
-   *     Slot::start('body'); ... Slot::end();  // @slot('body') inside wrapper
-   *   Slot::end();                      // compiled wrapper end
-   *   $component->renderComponent('card', [...]);  // ← we are here
-   *
-   * At this point $slots contains whatever the caller injected.  We freeze
-   * them so the card's own default @slot('body') block cannot overwrite them,
-   * render the card view, then thaw to reset for the next sibling component.
-   */
   public function renderComponent(string $name, array $props = []): string
   {
     if (!ComponentManager::has($name)) {
@@ -105,13 +88,9 @@ class Component
     $component->setProps($props);
     $this->addChild($component);
 
-    // Snapshot the slots captured so far by the caller, then freeze them so
-    // the component's own default @slot definitions cannot overwrite them.
+    // Snapshot slots and freeze them
     Slot::freeze();
-
     $html = $component->render($props);
-
-    // Release the freeze and clear slots so the next component starts clean.
     Slot::thaw();
 
     return $html;
@@ -129,13 +108,9 @@ class Component
       $initializer = $this->stateInitializer;
       $defaultState = $initializer();
 
-      error_log("Initializing state for {$this->name}: " . json_encode($defaultState));
-
       if (empty($this->stateManager->all())) {
         $this->stateManager->initialize($defaultState);
       }
-
-      error_log("State after init: " . json_encode($this->stateManager->all()));
     }
   }
 
@@ -166,13 +141,8 @@ class Component
     $this->initializeStateManager();
 
     $stateArray = $this->stateManager->all();
-
-    error_log("Rendering component '{$this->name}'. State: " . json_encode($stateArray));
-
     $props['_instance'] = $this->stateManager->getInstanceId();
     $mergedState = array_merge($stateArray, $props);
-
-    error_log("Merged state: " . json_encode($mergedState));
 
     return $this->executeView($mergedState);
   }
