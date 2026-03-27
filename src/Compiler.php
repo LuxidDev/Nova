@@ -269,6 +269,17 @@ class Compiler
       }
     }
 
+    // @raw 
+    if (preg_match('/^@raw\(/', substr($template, $position))) {
+      $pattern = '/^@raw\(((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\)/';
+      if (preg_match($pattern, substr($template, $position), $matches)) {
+        $expression = trim($matches[1]);
+        $php = "<?php echo {$expression}; ?>";
+        $end = $position + strlen($matches[0]);
+        return ['php' => $php, 'end' => $end];
+      }
+    }
+
     // @if
     if (preg_match('/^@if\(/', substr($template, $position))) {
       $pattern = '/^@if\(((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\)/';
