@@ -1,36 +1,98 @@
 <?php
 
+/**
+ * Register a component (supports both old and new syntax)
+ */
 if (!function_exists('component')) {
   function component(string $name, callable $definition): void
   {
-    $component = new \Luxid\Nova\Component($name, $definition);
-    \Luxid\Nova\ComponentManager::register($name, $component);
+    // Check if it's the new simplified syntax (no $c parameter)
+    $reflection = new ReflectionFunction($definition);
+    $parameters = $reflection->getParameters();
+
+    if (count($parameters) === 0) {
+      // New syntax: component('name', function() { $state(...); $actions(...); $view(...); })
+      \Luxid\Nova\ComponentManager::register($name, $definition);
+    } else {
+      // Old syntax: component('name', function($c) { ... })
+      $component = new \Luxid\Nova\Component($name, $definition);
+      \Luxid\Nova\ComponentManager::register($name, $component);
+    }
   }
 }
 
+/**
+ * Define component state (for use inside component definition)
+ */
+if (!function_exists('state')) {
+  function state(callable $initializer): void
+  {
+    $component = \Luxid\Nova\ComponentManager::getCurrentComponent();
+    if (!$component) {
+      throw new \RuntimeException('state() can only be called inside component definition');
+    }
+    $component->state($initializer);
+  }
+}
+
+/**
+ * Define component actions (for use inside component definition)
+ */
+if (!function_exists('actions')) {
+  function actions(array $actions): void
+  {
+    $component = \Luxid\Nova\ComponentManager::getCurrentComponent();
+    if (!$component) {
+      throw new \RuntimeException('actions() can only be called inside component definition');
+    }
+    $component->actions($actions);
+  }
+}
+
+/**
+ * Define component view (for use inside component definition)
+ */
+if (!function_exists('view')) {
+  function view(callable $view): void
+  {
+    $component = \Luxid\Nova\ComponentManager::getCurrentComponent();
+    if (!$component) {
+      throw new \RuntimeException('view() can only be called inside component definition');
+    }
+    $component->view($view);
+  }
+}
+
+/**
+ * Define component props (for use inside component definition)
+ */
+if (!function_exists('props')) {
+  function props(array $defaultProps = []): void
+  {
+    $component = \Luxid\Nova\ComponentManager::getCurrentComponent();
+    if (!$component) {
+      throw new \RuntimeException('props() can only be called inside component definition');
+    }
+    $component->setDefaultProps($defaultProps);
+  }
+}
+
+/**
+ * Render a Nova component
+ */
 if (!function_exists('nova')) {
   function nova(string $name, array $props = []): string
   {
-    // Check if an instance ID was passed in props
     $instanceId = $props['_instance'] ?? null;
-
-    // Create a new component instance
     $component = \Luxid\Nova\ComponentManager::make($name, $instanceId);
-
     return $component->render($props);
   }
 }
 
+/**
+ * Call an action on a component instance
+ */
 if (!function_exists('nova_action')) {
-  /**
-   * Call an action on a component instance
-   * 
-   * @param string $componentName
-   * @param string $instanceId
-   * @param string $action
-   * @param array $params
-   * @return string
-   */
   function nova_action(string $componentName, string $instanceId, string $action, array $params = []): string
   {
     $component = \Luxid\Nova\ComponentManager::make($componentName, $instanceId);
@@ -38,7 +100,9 @@ if (!function_exists('nova_action')) {
   }
 }
 
-// Keep existing helper functions...
+/**
+ * Check if a component exists
+ */
 if (!function_exists('nova_component_exists')) {
   function nova_component_exists(string $name): bool
   {
@@ -46,6 +110,9 @@ if (!function_exists('nova_component_exists')) {
   }
 }
 
+/**
+ * Get all registered components
+ */
 if (!function_exists('nova_get_components')) {
   function nova_get_components(): array
   {

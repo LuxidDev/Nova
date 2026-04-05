@@ -5,13 +5,30 @@ namespace Luxid\Nova;
 class ComponentManager
 {
   protected static array $components = [];
+  protected static ?Component $currentComponent = null;
 
   /**
    * Register a component blueprint
    */
-  public static function register(string $name, Component $component): void
+  public static function register(string $name, $component): void
   {
     static::$components[$name] = $component;
+  }
+
+  /**
+   * Set the current component being built (for helper functions)
+   */
+  public static function setCurrentComponent(?Component $component): void
+  {
+    self::$currentComponent = $component;
+  }
+
+  /**
+   * Get the current component being built (for helper functions)
+   */
+  public static function getCurrentComponent(): ?Component
+  {
+    return self::$currentComponent;
   }
 
   /**
@@ -25,8 +42,17 @@ class ComponentManager
       throw new \RuntimeException("Component '{$name}' not found");
     }
 
-    // Use getter method to access the definition
-    return new Component($name, $blueprint->getDefinition(), $instanceId);
+    // If it's a Component instance, use its definition
+    if ($blueprint instanceof Component) {
+      return new Component($name, $blueprint->getDefinition(), $instanceId);
+    }
+
+    // If it's a callable (simplified syntax), create component from it
+    if (is_callable($blueprint)) {
+      return Component::createFromDefinition($name, $blueprint, $instanceId);
+    }
+
+    throw new \RuntimeException("Invalid component registration for '{$name}'");
   }
 
   /**
@@ -34,7 +60,17 @@ class ComponentManager
    */
   public static function resolve(string $name): ?Component
   {
-    return static::$components[$name] ?? null;
+    $blueprint = static::$components[$name] ?? null;
+
+    if ($blueprint instanceof Component) {
+      return $blueprint;
+    }
+
+    if (is_callable($blueprint)) {
+      return Component::createFromDefinition($name, $blueprint);
+    }
+
+    return null;
   }
 
   /**

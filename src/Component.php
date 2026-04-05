@@ -15,6 +15,7 @@ class Component
   protected ?string $instanceId = null;
   protected ?string $compiledView = null;
   protected array $props = [];
+  protected array $defaultProps = [];
   protected array $children = [];
 
   public function __construct(string $name, Closure $definition, ?string $instanceId = null)
@@ -25,9 +26,55 @@ class Component
     $this->processDefinition();
   }
 
+  /**
+   * Create a component from a simplified definition (no $c parameter)
+   */
+  public static function createFromDefinition(string $name, callable $definition, ?string $instanceId = null): self
+  {
+    // Create a temporary component to capture the definition
+    $component = new self($name, function ($c) {}, $instanceId);
+
+    // Set as current component for helper functions
+    ComponentManager::setCurrentComponent($component);
+
+    // Execute the user's definition (which uses $state, $actions, $view)
+    $definition();
+
+    // Clear current component
+    ComponentManager::setCurrentComponent(null);
+
+    return $component;
+  }
+
   public function getDefinition(): Closure
   {
     return $this->definition;
+  }
+
+  /**
+   * Set default props (called via props() helper)
+   */
+  public function setDefaultProps(array $props): self
+  {
+    $this->defaultProps = $props;
+    return $this;
+  }
+
+  /**
+   * Get default props
+   */
+  public function getDefaultProps(): array
+  {
+    return $this->defaultProps;
+  }
+
+  /**
+   * Set props with defaults merged
+   */
+  public function setProps(array $props): self
+  {
+    $this->props = array_merge($this->defaultProps, $props);
+    return $this;
   }
 
   protected function processDefinition(): void
@@ -40,30 +87,30 @@ class Component
     $this->stateInitializer = $initializer;
     return $this;
   }
+
   public function actions(array $actions): self
   {
     $this->actions = $actions;
     return $this;
   }
+
   public function view(Closure $view): self
   {
     $this->view = $view;
     return $this;
   }
+
   public function instanceId(string $id): self
   {
     $this->instanceId = $id;
     return $this;
   }
-  public function setProps(array $props): self
-  {
-    $this->props = $props;
-    return $this;
-  }
+
   public function prop(string $key, $default = null)
   {
     return $this->props[$key] ?? $default;
   }
+
   public function addChild(Component $child): self
   {
     $this->children[] = $child;
@@ -171,7 +218,7 @@ class Component
 
     $state = $this->stateManager->all();
 
-    // Pass the params as a single array argument, not spread
+    // Pass the params as a single array argument
     ($this->actions[$action])($state, $params);
 
     // Write mutated values back into the state manager
@@ -189,10 +236,12 @@ class Component
   {
     return $this->name;
   }
+
   public function hasAction(string $action): bool
   {
     return isset($this->actions[$action]);
   }
+
   public function getActions(): array
   {
     return $this->actions;
