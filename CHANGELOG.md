@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.2.1
+
+Worker-runtime safety.
+
+### Fixed
+
+- **A template that threw mid-capture leaked an output buffer.** `Slot::start()`
+  opens a buffer that only `end()` closes, so an aborted render left it open —
+  and every later response was swallowed into that stale buffer. Under PHP-FPM
+  the process died and took the buffer with it; under a worker they accumulate.
+  `Slot::reset()` closes them.
+
+### Added
+
+- `Slot::reset()` and `Slot::openCaptures()`.
+- `ComponentManager::resetRequestState()` and `Performance::reset()`.
+- `ComponentCache::flushMemory()` and `memoryCount()`.
+- `NovaServiceProvider` is now discovered through `extra.luxid.providers` and
+  registers Nova's per-request state with the engine's reset registry, so a
+  worker clears it between requests automatically.
+
+### Changed
+
+- The in-process component cache is capped at 500 entries and evicts the oldest,
+  rather than growing for the life of the process.
+- `NovaServiceProvider` matches the engine's provider contract — a no-argument
+  constructor with `register()` and `boot()` — while staying usable standalone;
+  everything touching the engine is guarded by a class check.
+
 ## 0.2.0
 
 Pre-release. Several fixes change behaviour on purpose; they are listed first.
