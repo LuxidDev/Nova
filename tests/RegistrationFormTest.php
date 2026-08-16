@@ -20,8 +20,9 @@ class RegistrationFormTest extends TestCase
       session_start();
     }
 
-    // Register the component
-    require_once __DIR__ . '/../components.php';
+    // `require`, not `require_once`: the registry is cleared before every test,
+    // so the definitions have to be re-registered each time.
+    require __DIR__ . '/../components.php';
   }
 
   protected function tearDown(): void
@@ -224,7 +225,7 @@ class RegistrationFormTest extends TestCase
     $component = ComponentManager::make('registration-form');
     $html = $component->render();
 
-    $this->assertStringContainsString('<form @submit="register"', $html);
+    $this->assertStringContainsString('<form data-nova-submit="register"', $html);
     $this->assertStringContainsString('Create an Account', $html);
     $this->assertStringContainsString('Register', $html);
     $this->assertStringContainsString('data-nova-component', $html);
@@ -268,11 +269,13 @@ class RegistrationFormTest extends TestCase
     $component->callAction('register', $testData);
     $state = $component->getState();
 
-    $this->assertCount(4, $state['errors']);
+    // `confirmed` reports against the field that declared it, so the mismatch
+    // lands on `password` alongside its length failure rather than on the
+    // confirmation input.
+    $this->assertCount(3, $state['errors']);
     $this->assertArrayHasKey('name', $state['errors']);
     $this->assertArrayHasKey('email', $state['errors']);
     $this->assertArrayHasKey('password', $state['errors']);
-    $this->assertArrayHasKey('password_confirmation', $state['errors']);
   }
 
   /**

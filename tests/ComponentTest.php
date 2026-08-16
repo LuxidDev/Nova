@@ -43,8 +43,8 @@ class ComponentTest extends TestCase
     // Render with props
     $output = nova('greeting', ['name' => 'World']);
 
-    // Check output (directive not processed yet, so raw output)
-    $this->assertStringContainsString("Hello, @echo(\$state->name)!", $output);
+    // The @echo directive is compiled and its value HTML-escaped.
+    $this->assertStringContainsString('Hello, World!', $output);
   }
 
   public function testComponentState()
