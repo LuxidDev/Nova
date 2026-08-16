@@ -1,3 +1,6 @@
 /vendor/
-/storage/*
-!/storage/.gitignore
+/.phpunit.cache/
+/storage/
+nova-debug.log
+.php-cs-fixer.cache
+.phpunit.result.cache
