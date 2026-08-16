@@ -15,8 +15,6 @@ component('registration-form', function ($c) {
 
   $c->actions([
     'register' => function (&$state, $data) {
-      // Debug: Log the incoming data
-      error_log("Register action called with data: " . print_r($data, true));
 
       // Validate
       $validator = new \Luxid\Nova\Validation\Validator($data, [
@@ -26,23 +24,19 @@ component('registration-form', function ($c) {
         'password_confirmation' => 'required'
       ]);
 
-      error_log("Validation rules applied");
 
       $isValid = $validator->validate();
-      error_log("Validation result: " . ($isValid ? 'valid' : 'invalid'));
 
       if ($isValid) {
         $state['name'] = $data['name'];
         $state['email'] = $data['email'];
         $state['success'] = true;
         $state['errors'] = [];
-        error_log("Registration successful");
       } else {
         $state['errors'] = $validator->getErrors();
         $state['success'] = false;
         $state['name'] = $data['name'] ?? '';
         $state['email'] = $data['email'] ?? '';
-        error_log("Validation errors: " . print_r($state['errors'], true));
       }
     }
   ]);
@@ -66,7 +60,7 @@ component('registration-form', function ($c) {
           <input type="text" name="name" value="<?php echo htmlspecialchars($state->name); ?>"
             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <?php if (isset($state->errors['name'])): ?>
-            <div style="color: #f44336; font-size: 12px; margin-top: 5px;">
+            <div class="nova-field-error" style="color: #f44336; font-size: 12px; margin-top: 5px;">
               <?php echo htmlspecialchars($state->errors['name'][0]); ?>
             </div>
           <?php endif; ?>
@@ -77,7 +71,7 @@ component('registration-form', function ($c) {
           <input type="email" name="email" value="<?php echo htmlspecialchars($state->email); ?>"
             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <?php if (isset($state->errors['email'])): ?>
-            <div style="color: #f44336; font-size: 12px; margin-top: 5px;">
+            <div class="nova-field-error" style="color: #f44336; font-size: 12px; margin-top: 5px;">
               <?php echo htmlspecialchars($state->errors['email'][0]); ?>
             </div>
           <?php endif; ?>
@@ -88,7 +82,7 @@ component('registration-form', function ($c) {
           <input type="password" name="password"
             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
           <?php if (isset($state->errors['password'])): ?>
-            <div style="color: #f44336; font-size: 12px; margin-top: 5px;">
+            <div class="nova-field-error" style="color: #f44336; font-size: 12px; margin-top: 5px;">
               <?php echo htmlspecialchars($state->errors['password'][0]); ?>
             </div>
           <?php endif; ?>
