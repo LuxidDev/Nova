@@ -4,6 +4,14 @@ namespace Luxid\Nova;
 
 class ComponentCache
 {
+  /**
+   * Most entries to keep in the in-process cache.
+   *
+   * Unbounded, this grows for the life of the process, which under a worker
+   * runtime means until the worker is recycled.
+   */
+  protected const MAX_INSTANCES = 500;
+
   protected static array $instances = [];
   protected static ?string $cachePath = null;
   protected static bool $enabled = false;
@@ -51,7 +59,11 @@ class ComponentCache
     // Generate fresh
     $data = $callback();
 
-    // Store in memory
+    // Store in memory, evicting the oldest entry once the cap is reached.
+    if (count(self::$instances) >= self::MAX_INSTANCES) {
+      array_shift(self::$instances);
+    }
+
     self::$instances[$key] = $data;
 
     // Store in file cache
@@ -88,5 +100,21 @@ class ComponentCache
         unlink($file);
       }
     }
+  }
+
+  /**
+   * Drop the in-process cache, leaving any file cache in place.
+   */
+  public static function flushMemory(): void
+  {
+    self::$instances = [];
+  }
+
+  /**
+   * Get the number of entries held in memory.
+   */
+  public static function memoryCount(): int
+  {
+    return count(self::$instances);
   }
 }
