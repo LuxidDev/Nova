@@ -159,8 +159,13 @@
           params
         };
 
+        // The server rejects action calls without a matching token, so a missing
+        // meta tag is a setup error worth surfacing rather than a silent 403.
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (csrfToken) body._token = csrfToken;
+        if (!csrfToken) {
+          throw new Error('Missing csrf-token meta tag; Nova actions cannot be sent.');
+        }
+        body._token = csrfToken;
 
         const response = await fetch(this.core.config.actionEndpoint, {
           method: 'POST',
@@ -169,6 +174,7 @@
             'Accept': 'text/html',
             'X-Requested-With': 'XMLHttpRequest',
           },
+          credentials: 'same-origin',
           body: JSON.stringify(body)
         });
 
