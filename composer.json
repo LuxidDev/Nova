@@ -45,5 +45,12 @@
   "version": "0.2.0",
   "config": {
     "sort-packages": true
+  },
+  "extra": {
+    "luxid": {
+      "providers": [
+        "Luxid\\Nova\\NovaServiceProvider"
+      ]
+    }
   }
 }
