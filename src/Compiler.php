@@ -118,7 +118,7 @@ class Compiler
 
   protected static function parseSlotBlock(string $template, int $position, bool $callerContext = false): ?array
   {
-    $pattern = '/^@slot\(([^)]+)\)/';
+    $pattern = '/^@slot\(((?:[^()]+|\([^()]*\))*)\)/';
     if (!preg_match($pattern, substr($template, $position), $matches)) {
       return null;
     }
@@ -263,7 +263,9 @@ class Compiler
       $pattern = '/^@echo\(((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\)/';
       if (preg_match($pattern, substr($template, $position), $matches)) {
         $expression = trim($matches[1]);
-        $php = "<?php echo htmlspecialchars({$expression}, ENT_QUOTES, 'UTF-8'); ?>";
+        // ENT_SUBSTITUTE keeps malformed UTF-8 from collapsing the output to an
+        // empty string, and the cast tolerates null without a deprecation.
+        $php = "<?php echo htmlspecialchars((string) ({$expression}), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>";
         $end = $position + strlen($matches[0]);
         return ['php' => $php, 'end' => $end];
       }
@@ -320,7 +322,8 @@ class Compiler
 
     // @foreach
     if (preg_match('/^@foreach\(/', substr($template, $position))) {
-      $pattern = '/^@foreach\(([^)]+)\)/';
+      // Balanced parentheses, so `@foreach(array_keys($x) as $k)` parses.
+      $pattern = '/^@foreach\(((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\)/';
       if (preg_match($pattern, substr($template, $position), $matches)) {
         $expression = trim($matches[1]);
         $php = "<?php foreach ({$expression}): ?>";
@@ -339,7 +342,8 @@ class Compiler
 
     // @for
     if (preg_match('/^@for\(/', substr($template, $position))) {
-      $pattern = '/^@for\(([^)]+)\)/';
+      // Balanced parentheses, so `@for($i = 0; $i < count($x); $i++)` parses.
+      $pattern = '/^@for\(((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*)\)/';
       if (preg_match($pattern, substr($template, $position), $matches)) {
         $expression = trim($matches[1]);
         $php = "<?php for ({$expression}): ?>";
