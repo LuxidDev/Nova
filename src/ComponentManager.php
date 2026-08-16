@@ -104,4 +104,16 @@ class ComponentManager
   {
     static::$components = [];
   }
+
+  /**
+   * Clear request-scoped state, keeping the registry warm.
+   *
+   * The component registry itself is deliberately preserved: rebuilding it per
+   * request is exactly the cost a worker runtime exists to avoid. Only the
+   * pointer to the component currently being defined is per-request.
+   */
+  public static function resetRequestState(): void
+  {
+    self::$currentComponent = null;
+  }
 }

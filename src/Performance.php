@@ -72,4 +72,16 @@ class Performance
     self::$timers = [];
     self::$queries = [];
   }
+
+  /**
+   * Discard collected timings and queries.
+   *
+   * These accumulate for the life of the process, so a worker would grow them
+   * without bound.
+   */
+  public static function reset(): void
+  {
+    self::$timers = [];
+    self::$queries = [];
+  }
 }
