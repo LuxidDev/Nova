@@ -78,6 +78,29 @@ if (!function_exists('props')) {
 }
 
 /**
+ * Declare which state keys a component may publish to the browser.
+ *
+ * State is not serialised into the page unless it is named here, so a component
+ * holding a loaded database row does not leak it into the HTML.
+ *
+ * @param list<string> $keys State keys the browser is allowed to see
+ *
+ * @throws RuntimeException When called outside a component definition
+ */
+if (!function_exists('expose')) {
+  function expose(array $keys): void
+  {
+    $component = \Luxid\Nova\ComponentManager::getCurrentComponent();
+
+    if (!$component) {
+      throw new \RuntimeException('expose() can only be called inside a component definition');
+    }
+
+    $component->expose($keys);
+  }
+}
+
+/**
  * Render a Nova component
  */
 if (!function_exists('nova')) {
