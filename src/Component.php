@@ -13,10 +13,16 @@ class Component
   protected array $actions = [];
   protected ?Closure $view = null;
   protected ?string $instanceId = null;
-  protected ?string $compiledView = null;
   protected array $props = [];
   protected array $defaultProps = [];
   protected array $children = [];
+
+  /**
+   * State keys published to the browser via `data-nova-state`.
+   *
+   * @var list<string>
+   */
+  protected array $exposedState = [];
 
   public function __construct(string $name, Closure $definition, ?string $instanceId = null)
   {
@@ -161,12 +167,11 @@ class Component
     return ob_get_clean();
   }
 
-  protected function compileViewTemplate(): string
-  {
-    $rawTemplate = $this->getRawTemplate();
-    return Compiler::compile($rawTemplate, $this->name . '_' . md5($rawTemplate));
-  }
-
+  /**
+   * Render the component and wrap it in its client-side envelope.
+   *
+   * @param array<string, mixed> $props Props supplied by the caller
+   */
   public function render(array $props = []): string
   {
     $this->initializeStateManager();
@@ -177,35 +182,79 @@ class Component
     return $this->executeView($mergedState);
   }
 
+  /**
+   * Compile and execute the view, wrapped in the element the client runtime
+   * uses to locate this instance.
+   *
+   * @param array<string, mixed> $state Merged state and props
+   */
   protected function executeView(array $state): string
   {
-    if ($this->compiledView === null) {
-      $this->compiledView = $this->compileViewTemplate();
+    $rawTemplate = $this->getRawTemplate();
+    $instanceId = $this->getInstanceId();
+
+    $html = Compiler::render(
+      $rawTemplate,
+      $this->name . ':' . hash('xxh128', $rawTemplate),
+      [
+        'state' => (object) $state,
+        'component' => $this,
+      ]
+    );
+
+    return '<div data-nova-component'
+      . ' data-nova-id="' . htmlspecialchars($instanceId, ENT_QUOTES) . '"'
+      . ' data-nova-component-name="' . htmlspecialchars($this->name, ENT_QUOTES) . '"'
+      . $this->stateAttribute($state)
+      . '>' . $html . '</div>';
+  }
+
+  /**
+   * Render the `data-nova-state` attribute, if the component exposes state.
+   *
+   * State is opt-in rather than automatic. Serialising everything meant any
+   * value a component happened to hold — a loaded user row, an API token —
+   * was published into the page's HTML for anyone to read.
+   *
+   * @param array<string, mixed> $state Merged state and props
+   */
+  protected function stateAttribute(array $state): string
+  {
+    if ($this->exposedState === []) {
+      return '';
     }
 
-    $state        = (object) $state;
-    $component    = $this;
-    $compiledView = $this->compiledView;
+    $exposed = array_intersect_key($state, array_flip($this->exposedState));
 
-    return (function () use ($state, $compiledView, $component) {
-      ob_start();
+    if ($exposed === []) {
+      return '';
+    }
 
-      $instanceId = $component->getInstanceId();
-      $stateArray = get_object_vars($state);
+    $encoded = json_encode($exposed, JSON_THROW_ON_ERROR);
 
-      echo '<div 
-        data-nova-component 
-        data-nova-id="' . htmlspecialchars($instanceId) . '"
-        data-nova-component-name="' . htmlspecialchars($component->getName()) . '"';
-      if (!empty($stateArray)) {
-        echo ' data-nova-state="' . htmlspecialchars(json_encode($stateArray), ENT_QUOTES) . '"';
-      }
-      echo '>';
-      eval('?>' . $compiledView);
-      echo '</div>';
+    return ' data-nova-state="' . htmlspecialchars($encoded, ENT_QUOTES) . '"';
+  }
 
-      return ob_get_clean();
-    })();
+  /**
+   * Declare which state keys may be published to the client.
+   *
+   * @param list<string> $keys State keys the browser is allowed to see
+   */
+  public function expose(array $keys): self
+  {
+    $this->exposedState = $keys;
+
+    return $this;
+  }
+
+  /**
+   * Get the state keys published to the client.
+   *
+   * @return list<string>
+   */
+  public function getExposedState(): array
+  {
+    return $this->exposedState;
   }
 
   public function callAction(string $action, array $params = []): string
