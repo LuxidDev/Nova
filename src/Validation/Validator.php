@@ -218,26 +218,37 @@ class Validator
   /**
    * Replace parameters in message
    */
+  /**
+   * Fill the placeholders in a message template.
+   *
+   * Rule parameters are positional, so placeholders are filled in the order
+   * they appear in the message. The previous implementation keyed off the
+   * parameter index instead, which meant a single-parameter rule like `max:50`
+   * never filled its `:max` placeholder and the raw token reached the user.
+   *
+   * @param string       $message    Message template
+   * @param string       $fieldName  Human readable field name
+   * @param list<string> $parameters Rule parameters, in declaration order
+   */
   protected function replaceParameters(string $message, string $fieldName, array $parameters): string
   {
-    $replacements = [
-      ':field' => $fieldName,
-    ];
+    $message = str_replace(':field', $fieldName, $message);
 
-    foreach ($parameters as $index => $value) {
-      $key = $index === 0 ? ':min' : ($index === 1 ? ':max' : ':value');
-      if ($index === 0 && strpos($message, ':min') !== false) {
-        $replacements[':min'] = $value;
-      } elseif ($index === 1 && strpos($message, ':max') !== false) {
-        $replacements[':max'] = $value;
-      } elseif (strpos($message, ':other') !== false && $index === 0) {
-        $replacements[':other'] = $this->getFieldName($value);
-      } else {
-        $replacements[':value'] = $value;
+    if (preg_match_all('/:(?:min|max|value|other|size|format|date)\b/', $message, $matches) < 1) {
+      return $message;
+    }
+
+    foreach ($matches[0] as $index => $placeholder) {
+      $value = (string) ($parameters[$index] ?? '');
+      $replacement = $placeholder === ':other' ? $this->getFieldName($value) : $value;
+      $position = strpos($message, $placeholder);
+
+      if ($position !== false) {
+        $message = substr_replace($message, $replacement, $position, strlen($placeholder));
       }
     }
 
-    return strtr($message, $replacements);
+    return $message;
   }
 
   // Validation Rules
