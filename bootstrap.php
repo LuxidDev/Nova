@@ -1,135 +1,105 @@
 <?php
-// bootstrap.php - Fixed ordering
 
-// Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+declare(strict_types=1);
 
-// Load Nova core - this also loads helpers.php which defines component() function
+/**
+ * Standalone Nova bootstrap.
+ *
+ * Boots the component registry, answers component action calls and serves the
+ * client runtime. Applications built on the full framework do not need this
+ * file — the engine's front controller covers the same ground — but it lets
+ * Nova run on its own.
+ */
+
 require_once __DIR__ . '/vendor/autoload.php';
-
-// Now that helpers are loaded, load shared component definitions
 require_once __DIR__ . '/components.php';
 
-// Debug function
-function nova_debug($message)
-{
-  $logFile = __DIR__ . '/nova-debug.log';
-  file_put_contents($logFile, date('[Y-m-d H:i:s] ') . $message . PHP_EOL, FILE_APPEND);
+use Luxid\Nova\ActionDispatcher;
+use Luxid\Nova\ComponentCache;
+use Luxid\Nova\Compiler;
+use Luxid\Nova\Performance;
+
+// Errors are shown only when the environment asks for it. Displaying them
+// unconditionally leaks paths, queries and stack traces to anyone who can
+// trigger one.
+$novaDebug = filter_var($_ENV['NOVA_DEBUG'] ?? getenv('NOVA_DEBUG') ?: 'false', FILTER_VALIDATE_BOOL);
+error_reporting($novaDebug ? E_ALL : E_ALL & ~E_DEPRECATED);
+ini_set('display_errors', $novaDebug ? '1' : '0');
+
+$config = is_file(__DIR__ . '/config/nova.php') ? require __DIR__ . '/config/nova.php' : [];
+
+if ($config['cache']['enabled'] ?? false) {
+    Compiler::setCachePath($config['cache']['path']);
+    Compiler::enableDebug($config['cache']['debug'] ?? false);
 }
 
-// Handle Nova AJAX actions
-if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') {
-  nova_debug("AJAX Request detected");
-
-  // Parse JSON input if present
-  $input = json_decode(file_get_contents('php://input'), true);
-  nova_debug("Input: " . print_r($input, true));
-
-  if ($input && isset($input['component']) && isset($input['action'])) {
-    header('Content-Type: text/html');
-
-    try {
-      $componentName = $input['component'];
-      $instanceId = $input['instance'] ?? null;
-      $action = $input['action'];
-      $params = $input['params'] ?? [];
-
-      nova_debug("Action called - instanceId: {$instanceId}, action: {$action}");
-
-      nova_debug("Component name: {$componentName}");
-
-      // Check if component exists
-      if (!\Luxid\Nova\ComponentManager::has($componentName)) {
-        throw new Exception("Component '{$componentName}' not found");
-      }
-
-      // Call the action
-      $html = nova_action($componentName, $instanceId, $action, $params);
-      echo $html;
-      exit;
-    } catch (Exception $e) {
-      nova_debug("Error: " . $e->getMessage());
-      http_response_code(500);
-      echo "<div class='nova-error'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
-      exit;
-    }
-  }
-
-  // Handle form data submissions (non-JSON)
-  if (isset($_POST['_action']) && isset($_POST['_component'])) {
-    $componentName = $_POST['_component'];
-    $instanceId = $_POST['_instance'] ?? $componentName;
-    $action = $_POST['_action'];
-
-    // Build params from form data
-    $params = $_POST;
-    unset($params['_action'], $params['_component'], $params['_instance']);
-
-    try {
-      $html = nova_action($componentName, $instanceId, $action, $params);
-      echo $html;
-      exit;
-    } catch (Exception $e) {
-      http_response_code(500);
-      echo "<div class='nova-error'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
-      exit;
-    }
-  }
+if ($config['component_cache']['enabled'] ?? false) {
+    ComponentCache::enable($config['component_cache']['path']);
 }
 
-// Load configuration
-$configFile = __DIR__ . '/config/nova.php';
-if (file_exists($configFile)) {
-  $config = require_once $configFile;
-
-  // Configure compiler
-  if ($config['cache']['enabled'] ?? false) {
-    Luxid\Nova\Compiler::setCachePath($config['cache']['path']);
-    Luxid\Nova\Compiler::enableDebug($config['cache']['debug'] ?? false);
-  }
-
-  // Configure component cache
-  if ($config['component_cache']['enabled'] ?? false) {
-    Luxid\Nova\ComponentCache::enable($config['component_cache']['path']);
-  }
-
-  // Configure performance monitoring
-  if ($config['performance']['enabled'] ?? false) {
-    Luxid\Nova\Performance::enable();
-  }
+if ($config['performance']['enabled'] ?? false) {
+    Performance::enable();
 }
 
-// Initialize session for state persistence
-if (php_sapi_name() !== 'cli' && session_status() === PHP_SESSION_NONE) {
-  session_start();
+if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-// Serve Nova.js if requested
-if (isset($_SERVER['REQUEST_URI'])) {
-  $uri = $_SERVER['REQUEST_URI'];
+$requestUri = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
 
-  if ($uri === '/nova.js') {
-    header('Content-Type: application/javascript');
+// Serve the client runtime.
+$runtimeAssets = [
+    '/nova.js' => __DIR__ . '/public/nova.js',
+    '/nova-alpine.js' => __DIR__ . '/public/nova-alpine.js',
+];
+
+if (isset($runtimeAssets[$requestUri])) {
+    header('Content-Type: application/javascript; charset=utf-8');
     header('Cache-Control: public, max-age=3600');
-    $jsFile = __DIR__ . '/public/nova.js';
-    if (file_exists($jsFile)) {
-      readfile($jsFile);
-    } else {
-      echo "// Nova.js not found";
-    }
-    exit;
-  }
 
-  if ($uri === '/nova-alpine.js') {
-    header('Content-Type: application/javascript');
-    header('Cache-Control: public, max-age=3600');
-    $jsFile = __DIR__ . '/public/nova-alpine.js';
-    if (file_exists($jsFile)) {
-      readfile($jsFile);
+    if (is_file($runtimeAssets[$requestUri])) {
+        readfile($runtimeAssets[$requestUri]);
     } else {
-      echo "// Nova Alpine integration not found";
+        http_response_code(404);
+        echo '// Not found';
     }
+
     exit;
-  }
+}
+
+// Answer component action calls.
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $payload = json_decode((string) file_get_contents('php://input'), true);
+
+    if (!is_array($payload)) {
+        // Fall back to a plain form post, mapping its reserved fields.
+        $payload = [
+            'component' => $_POST['_component'] ?? null,
+            'action' => $_POST['_action'] ?? null,
+            'instance' => $_POST['_instance'] ?? null,
+            '_token' => $_POST['_token'] ?? null,
+            'params' => array_diff_key($_POST, array_flip(['_component', '_action', '_instance', '_token'])),
+        ];
+    }
+
+    if (ActionDispatcher::handles($payload)) {
+        header('Content-Type: text/html; charset=utf-8');
+
+        try {
+            echo ActionDispatcher::dispatch($payload);
+        } catch (RuntimeException $e) {
+            http_response_code(403);
+            echo '<div class="nova-error">' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>';
+        } catch (InvalidArgumentException $e) {
+            http_response_code(400);
+            echo '<div class="nova-error">' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>';
+        } catch (Throwable $e) {
+            http_response_code(500);
+            // The real reason goes to the log, not to the client.
+            error_log('[Nova] Action failed: ' . $e->getMessage());
+            echo '<div class="nova-error">The action could not be completed.</div>';
+        }
+
+        exit;
+    }
 }
