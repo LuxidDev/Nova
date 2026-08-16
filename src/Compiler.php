@@ -4,18 +4,132 @@ namespace Luxid\Nova;
 
 class Compiler
 {
+  /**
+   * In-memory compiled templates, keyed by cache key.
+   *
+   * @var array<string, string>
+   */
   protected static array $cache = [];
+
+  /**
+   * Paths of compiled template files, keyed by cache key.
+   *
+   * @var array<string, string>
+   */
+  protected static array $compiledFiles = [];
+
+  /**
+   * Directory compiled templates are written to.
+   */
   protected static ?string $cachePath = null;
+
+  /**
+   * Whether compiled templates persist to disk.
+   */
   protected static bool $useFileCache = false;
+
+  /**
+   * Whether compilation logs to the error log.
+   */
   public static bool $debug = false;
 
+  /**
+   * Choose where compiled templates are written.
+   *
+   * @param string $path Writable directory
+   */
   public static function setCachePath(string $path): void
   {
     self::$cachePath = rtrim($path, '/');
     self::$useFileCache = true;
+
     if (!is_dir(self::$cachePath)) {
       mkdir(self::$cachePath, 0755, true);
     }
+  }
+
+  /**
+   * Get the directory compiled templates are written to.
+   *
+   * Falls back to the system temp directory so rendering never has to reach for
+   * eval() just because the application did not configure a cache path.
+   */
+  public static function cachePath(): string
+  {
+    if (self::$cachePath === null) {
+      self::$cachePath = sys_get_temp_dir() . '/luxid-nova';
+    }
+
+    if (!is_dir(self::$cachePath)) {
+      mkdir(self::$cachePath, 0755, true);
+    }
+
+    return self::$cachePath;
+  }
+
+  /**
+   * Compile a template and execute it against the given scope.
+   *
+   * The compiled PHP is written to a file and included rather than passed to
+   * eval(): included files are visible to opcache, produce real file and line
+   * numbers in stack traces, and keep generated source off the eval() path
+   * entirely.
+   *
+   * @param string               $template Raw template source
+   * @param string               $cacheKey Key identifying this template
+   * @param array<string, mixed> $scope    Variables exposed to the template
+   *
+   * @throws \Throwable Whatever the template threw
+   */
+  public static function render(string $template, string $cacheKey, array $scope = []): string
+  {
+    $path = self::compiledFile($template, $cacheKey);
+
+    // Extracted rather than passed by name so the template sees `$state` and
+    // `$component` as plain variables, exactly as the view closure does.
+    extract($scope, EXTR_SKIP);
+
+    ob_start();
+
+    try {
+      include $path;
+    } catch (\Throwable $e) {
+      ob_end_clean();
+
+      throw $e;
+    }
+
+    return (string) ob_get_clean();
+  }
+
+  /**
+   * Compile a template to a file and return its path.
+   *
+   * The file is written atomically so a concurrent request never includes a
+   * half-written template.
+   *
+   * @param string $template Raw template source
+   * @param string $cacheKey Key identifying this template
+   */
+  public static function compiledFile(string $template, string $cacheKey): string
+  {
+    if (isset(self::$compiledFiles[$cacheKey]) && is_file(self::$compiledFiles[$cacheKey])) {
+      return self::$compiledFiles[$cacheKey];
+    }
+
+    $path = self::cachePath() . '/' . hash('xxh128', $cacheKey) . '.php';
+
+    if (!is_file($path)) {
+      $temporary = $path . '.' . getmypid() . '.tmp';
+      file_put_contents($temporary, self::compile($template, $cacheKey), LOCK_EX);
+      rename($temporary, $path);
+
+      if (self::$debug) {
+        error_log("[Nova] Compiled template: {$cacheKey}");
+      }
+    }
+
+    return self::$compiledFiles[$cacheKey] = $path;
   }
 
   public static function enableDebug(bool $enable = true): void
@@ -415,19 +529,23 @@ class Compiler
     return null;
   }
 
+  /**
+   * Drop every compiled template, in memory and on disk.
+   */
   public static function clearCache(): void
   {
     self::$cache = [];
+    self::$compiledFiles = [];
 
-    if (self::$useFileCache && self::$cachePath && is_dir(self::$cachePath)) {
-      $files = glob(self::$cachePath . '/*.php');
-      foreach ($files as $file) {
-        unlink($file);
-      }
+    $path = self::cachePath();
+    $files = glob($path . '/*.php') ?: [];
 
-      if (self::$debug) {
-        error_log("[Nova] Cleared template cache: " . count($files) . " files");
-      }
+    foreach ($files as $file) {
+      unlink($file);
+    }
+
+    if (self::$debug) {
+      error_log('[Nova] Cleared template cache: ' . count($files) . ' files');
     }
   }
 
