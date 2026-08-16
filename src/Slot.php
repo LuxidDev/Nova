@@ -92,4 +92,37 @@ class Slot
     self::$stack   = [];
     self::$frozen  = [];
   }
+
+  /**
+   * Discard everything captured, closing any buffer left open.
+   *
+   * Slot state is static, so under a worker runtime it survives the request
+   * that filled it and would render into the next visitor's page. This is
+   * registered with the engine's request scope and called between requests.
+   *
+   * A template that threw mid-capture leaves an output buffer open; those are
+   * closed here so the buffer nesting level cannot drift upward over time.
+   */
+  public static function reset(): void
+  {
+    while (self::$stack !== []) {
+      array_pop(self::$stack);
+
+      if (ob_get_level() > 0) {
+        ob_end_clean();
+      }
+    }
+
+    self::clear();
+  }
+
+  /**
+   * Get the number of captures currently open.
+   *
+   * Non-zero between requests means a template threw mid-capture.
+   */
+  public static function openCaptures(): int
+  {
+    return count(self::$stack);
+  }
 }
